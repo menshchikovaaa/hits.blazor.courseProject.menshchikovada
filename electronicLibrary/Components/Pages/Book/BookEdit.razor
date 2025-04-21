@@ -129,7 +129,6 @@
         allAuthors = await AuthorService.GetAuthorsAsync();
         allGenres = await GenreService.GetGenresAsync();
 
-        // Инициализация словарей
         foreach (var author in allAuthors)
         {
             selectedAuthorsDict[author.Id] = false;

@@ -55,13 +55,6 @@ else
                     Редактировать
                 </button>
             }
-            @if (isAuthenticated && !isLibrarian && book.AvailableCopies > 0)
-            {
-                <button @onclick="@(() => Navigation.NavigateTo("/books/edit/" + book.Id))"
-                        class="btn btn-success ms-2">
-                    Взять книгу
-                </button>
-            }
         </div>
     </div>
 }

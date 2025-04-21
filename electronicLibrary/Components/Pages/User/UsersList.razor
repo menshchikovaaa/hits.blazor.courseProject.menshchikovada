@@ -1,13 +1,20 @@
-﻿@page "/users"
-@attribute [Authorize(Roles = "Librarian,Admin")]
+﻿@page "/admin/users"
+@attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
-@inject IUserService UserService
+@using Microsoft.EntityFrameworkCore
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
 @inject NavigationManager Navigation
-@inject AuthenticationStateProvider AuthProvider
 
-<PageTitle>Пользователи</PageTitle>
+<PageTitle>Управление пользователями</PageTitle>
 
-<h3>Список пользователей</h3>
+<h3>Управление пользователями</h3>
+
+<div class="mb-3">
+    <button @onclick="ShowCreateDialog" class="btn btn-primary">
+        Создать нового пользователя
+    </button>
+</div>
 
 @if (users == null)
 {
@@ -15,204 +22,219 @@
 }
 else
 {
-    <div class="mb-3">
-        <div class="d-flex justify-content-between">
-            <div class="input-group" style="width: 300px">
-                <input @bind="searchTerm" class="form-control" placeholder="Поиск по имени или email..." />
-                <button @onclick="SearchUsers" class="btn btn-primary">Поиск</button>
-            </div>
-            <div>
-                <span class="me-3">Всего: @totalUsers</span>
-                <span>Активных: @activeUsers</span>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Имя</th>
+                <th>Email</th>
+                <th>Роли</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var user in users)
+            {
+                <tr>
+                    <td>@user.FullName</td>
+                    <td>@user.Email</td>
+                    <td>
+                        @{
+                            var roles = userRoles.TryGetValue(user.Id, out var r) ? r : new List<string>();
+                            @string.Join(", ", roles)
+                        }
+                    </td>
+                    <td>
+                        <button @onclick="() => OpenEditDialog(user)"
+                                class="btn btn-sm btn-warning">
+                            Изменить роли
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<!-- Диалог создания пользователя -->
+@if (showCreateDialog)
+{
+    <div class="modal" style="display:block; background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Создание пользователя</h5>
+                    <button @onclick="CloseCreateDialog" class="btn-close"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="newUser" OnValidSubmit="CreateUser">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label>Полное имя</label>
+                            <InputText @bind-Value="newUser.FullName" class="form-control" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label>Email</label>
+                            <InputText @bind-Value="newUser.Email" class="form-control" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label>Пароль</label>
+                            <InputText type="password" @bind-Value="newUser.Password" class="form-control" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label>Роль</label>
+                            <select @bind="newUser.SelectedRole" class="form-select">
+                                <option value="User">Читатель</option>
+                                <option value="Librarian">Библиотекарь</option>
+                                <option value="Admin">Администратор</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Создать</button>
+                        <button type="button" @onclick="CloseCreateDialog"
+                                class="btn btn-secondary ms-2">
+                            Отмена
+                        </button>
+                    </EditForm>
+                </div>
             </div>
         </div>
     </div>
-
-    @if (!users.Any())
-    {
-        <p>Пользователи не найдены</p>
-    }
-    else
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Имя</th>
-                    <th>Email</th>
-                    <th>Телефон</th>
-                    <th>Роль</th>
-                    <th>Займы</th>
-                    <th>Действия</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var user in users)
-                {
-                    <tr>
-                        <td>@(user.FullName ?? "-")</td>
-                        <td>@user.Email</td>
-                        <td>@(user.PhoneNumber ?? "-")</td>
-                        <td>
-                            @if (userRoles.ContainsKey(user.Id) && userRoles[user.Id])
-                            {
-                                <span class="badge bg-success">Библиотекарь</span>
-                            }
-                            else
-                            {
-                                <span class="badge bg-secondary">Пользователь</span>
-                            }
-                        </td>
-                        <td>
-                            @{
-                                var loans = user.BookLoans?.Count(bl => !bl.ReturnDate.HasValue) ?? 0;
-                                var overdue = user.BookLoans?.Count(bl => bl.IsOverdue) ?? 0;
-                            }
-                            <span class="@(overdue > 0 ? "text-danger" : "")">
-                                @loans (@overdue просрочено)
-                            </span>
-                        </td>
-                        <td>
-                            <button @onclick="() => EditUser(user.Id)"
-                                    class="btn btn-sm btn-warning">
-                                Редактировать
-                            </button>
-
-                            <button @onclick="() => ViewUser(user.Id)"
-                                    class="btn btn-sm btn-info ms-1">
-                                Просмотр
-                            </button>
-
-                            @if (isAdmin)
-                            {
-                                <button @onclick="() => ToggleLibrarianRole(user.Id)"
-                                        class="btn btn-sm @(userRoles.ContainsKey(user.Id) && userRoles[user.Id] ? "btn-danger" : "btn-outline-success") ms-1">
-                                    @(userRoles.ContainsKey(user.Id) && userRoles[user.Id] ? "Разжаловать" : "Назначить")
-                                </button>
-                            }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
 }
 
-@if (!string.IsNullOrEmpty(errorMessage))
+<!-- Диалог изменения ролей -->
+@if (showEditDialog && currentUser != null)
 {
-    <div class="alert alert-danger mt-3">@errorMessage</div>
+    <div class="modal" style="display:block; background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Изменение ролей для @currentUser.Email</h5>
+                    <button @onclick="CloseEditDialog" class="btn-close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        @foreach (var role in allRoles)
+                        {
+                            <div class="form-check">
+                                <input type="checkbox"
+                                       checked="@(userRoles.TryGetValue(currentUser.Id, out var roles) && roles.Contains(role.Name))"
+                                       @onchange="@(async (e) => await ToggleUserRole(currentUser, role.Name, e.Value))"
+                                       class="form-check-input" />
+                                <label class="form-check-label">@role.Name</label>
+                            </div>
+                        }
+                    </div>
+                    <button @onclick="CloseEditDialog" class="btn btn-secondary">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
 }
 
 @code {
     private List<ApplicationUser> users = new();
-    private Dictionary<string, bool> userRoles = new();
-    private string searchTerm = string.Empty;
-    private int totalUsers;
-    private int activeUsers;
-    private bool isAdmin;
-    private string? errorMessage;
+    private List<IdentityRole> allRoles = new();
+    private bool showCreateDialog;
+    private bool showEditDialog;
+    private ApplicationUser? currentUser;
+    private Dictionary<string, List<string>> userRoles = new();
+
+    private class NewUserModel
+    {
+        [Required] public string FullName { get; set; } = "";
+        [Required][EmailAddress] public string Email { get; set; } = "";
+        [Required][MinLength(6)] public string Password { get; set; } = "";
+        public string SelectedRole { get; set; } = "User";
+    }
+
+    private NewUserModel newUser = new();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadUsers();
-        await LoadStatistics();
-
-        var authState = await AuthProvider.GetAuthenticationStateAsync();
-        isAdmin = authState.User.IsInRole("Admin");
+        await LoadRoles();
     }
 
     private async Task LoadUsers()
     {
-        try
-        {
-            users = await UserService.GetUsersAsync();
-            await LoadUserRoles();
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Ошибка загрузки пользователей: {ex.Message}";
-        }
-    }
-
-    private async Task LoadUserRoles()
-    {
+        users = await UserManager.Users.ToListAsync();
         userRoles.Clear();
+
         foreach (var user in users)
         {
-            try
-            {
-                userRoles[user.Id] = await UserService.IsUserLibrarianAsync(user.Id);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Ошибка загрузки роли для пользователя {user.Id}: {ex.Message}");
-                userRoles[user.Id] = false;
-            }
+            userRoles[user.Id] = (await UserManager.GetRolesAsync(user)).ToList();
         }
     }
 
-    private async Task LoadStatistics()
+    private async Task LoadRoles()
     {
-        totalUsers = await UserService.GetUsersCountAsync();
-        activeUsers = await UserService.GetActiveUsersCountAsync();
+        allRoles = await RoleManager.Roles.ToListAsync();
     }
 
-    private async Task SearchUsers()
+    private void ShowCreateDialog()
+    {
+        newUser = new NewUserModel();
+        showCreateDialog = true;
+    }
+
+    private void CloseCreateDialog()
+    {
+        showCreateDialog = false;
+    }
+
+    private async Task CreateUser()
+    {
+        var user = new ApplicationUser
+            {
+                UserName = newUser.Email,
+                Email = newUser.Email,
+                FullName = newUser.FullName
+            };
+
+        var result = await UserManager.CreateAsync(user, newUser.Password);
+
+        if (result.Succeeded)
+        {
+            await UserManager.AddToRoleAsync(user, newUser.SelectedRole);
+            await LoadUsers();
+            showCreateDialog = false;
+        }
+    }
+
+    private async Task OpenEditDialog(ApplicationUser user)
+    {
+        currentUser = user;
+        showEditDialog = true;
+    }
+
+    private void CloseEditDialog()
+    {
+        showEditDialog = false;
+        currentUser = null;
+    }
+
+    private async Task ToggleUserRole(ApplicationUser user, string roleName, object isChecked)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(searchTerm))
+            if ((bool)isChecked)
             {
-                await LoadUsers();
+                await UserManager.AddToRoleAsync(user, roleName);
             }
             else
             {
-                searchTerm = searchTerm.ToLower();
-                users = (await UserService.GetUsersAsync())
-                    .Where(u => (u.FullName?.ToLower().Contains(searchTerm) ?? false) ||
-                               (u.Email?.ToLower().Contains(searchTerm) ?? false))
-                    .ToList();
-                await LoadUserRoles();
+                await UserManager.RemoveFromRoleAsync(user, roleName);
             }
+
+            userRoles[user.Id] = (await UserManager.GetRolesAsync(user)).ToList();
         }
         catch (Exception ex)
         {
-            errorMessage = $"Ошибка поиска: {ex.Message}";
-        }
-    }
-
-    private void ViewUser(string id) => Navigation.NavigateTo($"/users/{id}");
-    private void EditUser(string id) => Navigation.NavigateTo($"/users/edit/{id}");
-
-    private async Task ToggleLibrarianRole(string userId)
-    {
-        try
-        {
-            errorMessage = null;
-
-            if (userRoles.TryGetValue(userId, out var isLibrarian) && isLibrarian)
-            {
-                var result = await UserService.RemoveUserFromLibrarianRoleAsync(userId);
-                if (!result.Succeeded)
-                {
-                    errorMessage = string.Join(", ", result.Errors.Select(e => e.Description));
-                    return;
-                }
-            }
-            else
-            {
-                var result = await UserService.SetUserAsLibrarianAsync(userId);
-                if (!result.Succeeded)
-                {
-                    errorMessage = string.Join(", ", result.Errors.Select(e => e.Description));
-                    return;
-                }
-            }
-
-            await LoadUserRoles();
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Ошибка изменения роли: {ex.Message}";
+            Console.WriteLine($"Ошибка изменения роли: {ex.Message}");
         }
     }
 }
