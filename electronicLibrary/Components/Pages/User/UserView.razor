@@ -1,0 +1,72 @@
+﻿@page "/users/{id}"
+@attribute [Authorize(Roles = "Librarian,Admin")]
+@rendermode InteractiveServer
+@inject IUserService UserService
+@inject NavigationManager Navigation
+
+<PageTitle>@user?.FullName</PageTitle>
+
+@if (user == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-header">
+            <h3>@user.FullName</h3>
+            <p class="mb-0">Зарегистрирован: @user.RegistrationDate.ToLocalTime().ToString("d")</p>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>Контактная информация:</h5>
+                    <p><strong>Email:</strong> @user.Email</p>
+                    <p><strong>Телефон:</strong> @(user.PhoneNumber ?? "-")</p>
+                </div>
+                <div class="col-md-6">
+                    <h5>Текущие займы:</h5>
+                    @if (user.BookLoans?.Any(bl => !bl.ReturnDate.HasValue) == true)
+                    {
+                        <ul class="list-group">
+                            @foreach (var loan in user.BookLoans.Where(bl => !bl.ReturnDate.HasValue).OrderBy(bl => bl.DueDate))
+                            {
+                                <li class="list-group-item @(loan.IsOverdue ? "list-group-item-danger" : "")">
+                                    @loan.Book.Title (до @loan.DueDate.ToShortDateString())
+                                    @if (loan.IsOverdue)
+                                    {
+                                        <span class="badge bg-danger float-end">Просрочено</span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <p>Нет активных займов</p>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="card-footer">
+            <button @onclick="BackToList" class="btn btn-secondary">Назад</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string Id { get; set; }
+
+    private ApplicationUser? user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await UserService.GetUserByIdAsync(Id);
+    }
+
+    private void BackToList()
+    {
+        Navigation.NavigateTo("/users");
+    }
+}

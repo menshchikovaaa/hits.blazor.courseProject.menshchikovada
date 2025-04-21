@@ -1,0 +1,77 @@
+﻿@page "/authors/add"
+@page "/authors/edit/{id:int}"
+@attribute [Authorize(Roles = "Librarian")]
+@rendermode InteractiveServer
+@inject IAuthorService AuthorService
+@inject NavigationManager Navigation
+
+<PageTitle>@(IsEditMode ? "Редактирование автора" : "Добавление автора")</PageTitle>
+
+<h3>@(IsEditMode ? "Редактирование автора" : "Добавление автора")</h3>
+
+<EditForm Model="author" OnValidSubmit="SaveAuthor">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="form-group mb-3">
+        <label for="fullName">Полное имя:</label>
+        <InputText @bind-Value="author.FullName" id="fullName" class="form-control" />
+        <ValidationMessage For="@(() => author.FullName)" />
+    </div>
+
+    <div class="form-group mb-3">
+        <label for="biography">Биография:</label>
+        <InputTextArea @bind-Value="author.Biography" id="biography" class="form-control" rows="5" />
+    </div>
+
+    <div class="form-group">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <button type="button" @onclick="Cancel" class="btn btn-secondary ms-2">Отмена</button>
+    </div>
+</EditForm>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Author author = new();
+    private bool IsEditMode => Id != 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsEditMode)
+        {
+            var existingAuthor = await AuthorService.GetAuthorByIdAsync(Id);
+            if (existingAuthor != null)
+            {
+                author = existingAuthor;
+            }
+        }
+    }
+
+    private async Task SaveAuthor()
+    {
+        try
+        {
+            if (IsEditMode)
+            {
+                await AuthorService.UpdateAuthorAsync(author);
+            }
+            else
+            {
+                await AuthorService.AddAuthorAsync(author);
+            }
+            Navigation.NavigateTo("/authors");
+        }
+        catch (Exception ex)
+        {
+            // Обработка ошибок
+            Console.WriteLine($"Ошибка: {ex.Message}");
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/authors");
+    }
+}

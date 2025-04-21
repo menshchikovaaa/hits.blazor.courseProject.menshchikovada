@@ -1,0 +1,54 @@
+﻿@page "/logout"
+@inject NavigationManager Navigation
+@inject SignInManager<ApplicationUser> SignInManager
+@inject AuthenticationStateProvider AuthProvider
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>Выход из системы</PageTitle>
+
+<div class="logout-container text-center mt-5">
+    @if (isLoggingOut)
+    {
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Загрузка...</span>
+        </div>
+        <p class="mt-2">Выполняется выход из системы...</p>
+    }
+    else
+    {
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle-fill"></i>
+            <h4>Вы успешно вышли</h4>
+            <button @onclick="RedirectToHome" class="btn btn-primary mt-3">
+                На главную
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private bool isLoggingOut = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await SignInManager.SignOutAsync();
+
+            if (AuthProvider is AuthenticationStateProvider authProvider)
+            {
+                await authProvider.GetAuthenticationStateAsync();
+            }
+        }
+        finally
+        {
+            isLoggingOut = false;
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+    }
+
+    private void RedirectToHome()
+    {
+        Navigation.NavigateTo("/", forceLoad: true);
+    }
+}

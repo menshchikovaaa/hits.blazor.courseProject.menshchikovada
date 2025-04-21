@@ -1,0 +1,78 @@
+﻿@page "/loans"
+@attribute [Authorize(Roles = "Librarian,Admin")]
+@rendermode InteractiveServer
+@inject IBookLoanService LoanService
+
+<h3>Активные займы</h3>
+
+@if (loans == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Книга</th>
+                <th>Читатель</th>
+                <th>Дата выдачи</th>
+                <th>Срок возврата</th>
+                <th>Статус</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var loan in loans)
+            {
+                <tr class="@(loan.IsOverdue ? "table-warning" : "")">
+                    <td>@loan.Book.Title</td>
+                    <td>@loan.User.FullName</td>
+                    <td>@loan.LoanDate.ToShortDateString()</td>
+                    <td>@loan.DueDate.ToShortDateString()</td>
+                    <td>
+                        @if (loan.IsOverdue)
+                        {
+                            <span class="badge bg-danger">Просрочено</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-success">Активно</span>
+                        }
+                    </td>
+                    <td>
+                        <button @onclick="() => ReturnBook(loan.Id)"
+                                class="btn btn-sm btn-primary">
+                            Вернуть
+                        </button>
+                        <button @onclick="() => RenewBook(loan.Id)"
+                                class="btn btn-sm btn-secondary ms-1">
+                            Продлить
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<BookLoan> loans = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        loans = await LoanService.GetActiveLoansAsync();
+    }
+
+    private async Task ReturnBook(int loanId)
+    {
+        await LoanService.ReturnBookAsync(loanId);
+        loans = await LoanService.GetActiveLoansAsync();
+    }
+
+    private async Task RenewBook(int loanId)
+    {
+        await LoanService.RenewLoanAsync(loanId, 14); // Продление на 14 дней
+        loans = await LoanService.GetActiveLoansAsync();
+    }
+}

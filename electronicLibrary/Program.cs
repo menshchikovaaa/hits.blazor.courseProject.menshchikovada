@@ -1,8 +1,12 @@
 using electronicLibrary.Components;
 using electronicLibrary.Components.Account;
 using electronicLibrary.Data;
+using electronicLibrary.Data.interfaces;
+using electronicLibrary.Data.Services;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace electronicLibrary
@@ -14,6 +18,11 @@ namespace electronicLibrary
             var builder = WebApplication.CreateBuilder(args);
 
             // Add services to the container.
+
+            builder.Services.AddHttpClient();
+            builder.Services.AddScoped(sp =>
+                sp.GetRequiredService<IHttpClientFactory>().CreateClient("ServerAPI"));
+
             builder.Services.AddRazorComponents()
                 .AddInteractiveServerComponents();
 
@@ -22,24 +31,39 @@ namespace electronicLibrary
             builder.Services.AddScoped<IdentityRedirectManager>();
             builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 
-            builder.Services.AddAuthentication(options =>
-                {
-                    options.DefaultScheme = IdentityConstants.ApplicationScheme;
-                    options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
-                })
-                .AddIdentityCookies();
 
-            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ??
+                throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlServer(connectionString));
             builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-            builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = true)
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddSignInManager()
-                .AddDefaultTokenProviders();
+            builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
+            .AddEntityFrameworkStores<ApplicationDbContext>()
+            .AddDefaultTokenProviders();
+            
+
+            builder.Services.AddAuthorizationBuilder()
+                .AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"))
+                .AddPolicy("LibrarianOrAdmin", policy => policy.RequireRole("Librarian", "Admin"))
+                .AddPolicy("LibrarianOnly", policy => policy.RequireRole("Librarian"))
+                .AddPolicy("AuthenticatedUser", policy => policy.RequireAuthenticatedUser());
+
+            builder.Services.AddAntiforgery(options => {
+                options.HeaderName = "X-CSRF-TOKEN";
+            });
 
             builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+
+
+            // Регистрация сервисов
+            builder.Services.AddScoped<IBookService, BookService>();
+            builder.Services.AddScoped<IAuthorService, AuthorService>();
+            builder.Services.AddScoped<IGenreService, GenreService>();
+            builder.Services.AddScoped<IUserService, UserService>();
+            builder.Services.AddScoped<IBookLoanService, BookLoanService>();
+
+
 
             var app = builder.Build();
 
@@ -51,20 +75,25 @@ namespace electronicLibrary
             else
             {
                 app.UseExceptionHandler("/Error");
-                // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
                 app.UseHsts();
             }
-
-            app.UseHttpsRedirection();
-
             app.UseStaticFiles();
             app.UseAntiforgery();
+
+            app.UseAuthentication(); 
+            app.UseAuthorization();
 
             app.MapRazorComponents<App>()
                 .AddInteractiveServerRenderMode();
 
-            // Add additional endpoints required by the Identity /Account Razor components.
             app.MapAdditionalIdentityEndpoints();
+            
+            app.MapPost("/api/logout", async (
+                [FromServices] SignInManager<ApplicationUser> signInManager) =>
+            {
+                await signInManager.SignOutAsync();
+                return Results.Ok();
+            }).RequireAuthorization();
 
             app.Run();
         }

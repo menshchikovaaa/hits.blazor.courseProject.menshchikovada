@@ -1,0 +1,218 @@
+﻿@page "/users"
+@attribute [Authorize(Roles = "Librarian,Admin")]
+@rendermode InteractiveServer
+@inject IUserService UserService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthProvider
+
+<PageTitle>Пользователи</PageTitle>
+
+<h3>Список пользователей</h3>
+
+@if (users == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <div class="mb-3">
+        <div class="d-flex justify-content-between">
+            <div class="input-group" style="width: 300px">
+                <input @bind="searchTerm" class="form-control" placeholder="Поиск по имени или email..." />
+                <button @onclick="SearchUsers" class="btn btn-primary">Поиск</button>
+            </div>
+            <div>
+                <span class="me-3">Всего: @totalUsers</span>
+                <span>Активных: @activeUsers</span>
+            </div>
+        </div>
+    </div>
+
+    @if (!users.Any())
+    {
+        <p>Пользователи не найдены</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Имя</th>
+                    <th>Email</th>
+                    <th>Телефон</th>
+                    <th>Роль</th>
+                    <th>Займы</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in users)
+                {
+                    <tr>
+                        <td>@(user.FullName ?? "-")</td>
+                        <td>@user.Email</td>
+                        <td>@(user.PhoneNumber ?? "-")</td>
+                        <td>
+                            @if (userRoles.ContainsKey(user.Id) && userRoles[user.Id])
+                            {
+                                <span class="badge bg-success">Библиотекарь</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Пользователь</span>
+                            }
+                        </td>
+                        <td>
+                            @{
+                                var loans = user.BookLoans?.Count(bl => !bl.ReturnDate.HasValue) ?? 0;
+                                var overdue = user.BookLoans?.Count(bl => bl.IsOverdue) ?? 0;
+                            }
+                            <span class="@(overdue > 0 ? "text-danger" : "")">
+                                @loans (@overdue просрочено)
+                            </span>
+                        </td>
+                        <td>
+                            <button @onclick="() => EditUser(user.Id)"
+                                    class="btn btn-sm btn-warning">
+                                Редактировать
+                            </button>
+
+                            <button @onclick="() => ViewUser(user.Id)"
+                                    class="btn btn-sm btn-info ms-1">
+                                Просмотр
+                            </button>
+
+                            @if (isAdmin)
+                            {
+                                <button @onclick="() => ToggleLibrarianRole(user.Id)"
+                                        class="btn btn-sm @(userRoles.ContainsKey(user.Id) && userRoles[user.Id] ? "btn-danger" : "btn-outline-success") ms-1">
+                                    @(userRoles.ContainsKey(user.Id) && userRoles[user.Id] ? "Разжаловать" : "Назначить")
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger mt-3">@errorMessage</div>
+}
+
+@code {
+    private List<ApplicationUser> users = new();
+    private Dictionary<string, bool> userRoles = new();
+    private string searchTerm = string.Empty;
+    private int totalUsers;
+    private int activeUsers;
+    private bool isAdmin;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+        await LoadStatistics();
+
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        isAdmin = authState.User.IsInRole("Admin");
+    }
+
+    private async Task LoadUsers()
+    {
+        try
+        {
+            users = await UserService.GetUsersAsync();
+            await LoadUserRoles();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка загрузки пользователей: {ex.Message}";
+        }
+    }
+
+    private async Task LoadUserRoles()
+    {
+        userRoles.Clear();
+        foreach (var user in users)
+        {
+            try
+            {
+                userRoles[user.Id] = await UserService.IsUserLibrarianAsync(user.Id);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка загрузки роли для пользователя {user.Id}: {ex.Message}");
+                userRoles[user.Id] = false;
+            }
+        }
+    }
+
+    private async Task LoadStatistics()
+    {
+        totalUsers = await UserService.GetUsersCountAsync();
+        activeUsers = await UserService.GetActiveUsersCountAsync();
+    }
+
+    private async Task SearchUsers()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(searchTerm))
+            {
+                await LoadUsers();
+            }
+            else
+            {
+                searchTerm = searchTerm.ToLower();
+                users = (await UserService.GetUsersAsync())
+                    .Where(u => (u.FullName?.ToLower().Contains(searchTerm) ?? false) ||
+                               (u.Email?.ToLower().Contains(searchTerm) ?? false))
+                    .ToList();
+                await LoadUserRoles();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка поиска: {ex.Message}";
+        }
+    }
+
+    private void ViewUser(string id) => Navigation.NavigateTo($"/users/{id}");
+    private void EditUser(string id) => Navigation.NavigateTo($"/users/edit/{id}");
+
+    private async Task ToggleLibrarianRole(string userId)
+    {
+        try
+        {
+            errorMessage = null;
+
+            if (userRoles.TryGetValue(userId, out var isLibrarian) && isLibrarian)
+            {
+                var result = await UserService.RemoveUserFromLibrarianRoleAsync(userId);
+                if (!result.Succeeded)
+                {
+                    errorMessage = string.Join(", ", result.Errors.Select(e => e.Description));
+                    return;
+                }
+            }
+            else
+            {
+                var result = await UserService.SetUserAsLibrarianAsync(userId);
+                if (!result.Succeeded)
+                {
+                    errorMessage = string.Join(", ", result.Errors.Select(e => e.Description));
+                    return;
+                }
+            }
+
+            await LoadUserRoles();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка изменения роли: {ex.Message}";
+        }
+    }
+}

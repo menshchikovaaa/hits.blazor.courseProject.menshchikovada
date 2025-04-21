@@ -1,0 +1,77 @@
+﻿@page "/genres/add"
+@page "/genres/edit/{id:int}"
+@attribute [Authorize(Roles = "Librarian")]
+@rendermode InteractiveServer
+@inject IGenreService GenreService
+@inject NavigationManager Navigation
+
+<PageTitle>@(IsEditMode ? "Редактирование жанра" : "Добавление жанра")</PageTitle>
+
+<h3>@(IsEditMode ? "Редактирование жанра" : "Добавление жанра")</h3>
+
+<EditForm Model="genre" OnValidSubmit="SaveGenre">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="form-group mb-3">
+        <label for="name">Название:</label>
+        <InputText @bind-Value="genre.Name" id="name" class="form-control" />
+        <ValidationMessage For="@(() => genre.Name)" />
+    </div>
+
+    <div class="form-group mb-3">
+        <label for="description">Описание:</label>
+        <InputTextArea @bind-Value="genre.Description" id="description" class="form-control" rows="3" />
+    </div>
+
+    <div class="form-group">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <button type="button" @onclick="Cancel" class="btn btn-secondary ms-2">Отмена</button>
+    </div>
+</EditForm>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Genre genre = new();
+    private bool IsEditMode => Id != 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsEditMode)
+        {
+            var existingGenre = await GenreService.GetGenreByIdAsync(Id);
+            if (existingGenre != null)
+            {
+                genre = existingGenre;
+            }
+        }
+    }
+
+    private async Task SaveGenre()
+    {
+        try
+        {
+            if (IsEditMode)
+            {
+                await GenreService.UpdateGenreAsync(genre);
+            }
+            else
+            {
+                await GenreService.AddGenreAsync(genre);
+            }
+            Navigation.NavigateTo("/genres");
+        }
+        catch (Exception ex)
+        {
+            // Обработка ошибок
+            Console.WriteLine($"Ошибка: {ex.Message}");
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/genres");
+    }
+}

@@ -1,6 +1,10 @@
-﻿@implements IDisposable
-
-@inject NavigationManager NavigationManager
+﻿@using Microsoft.AspNetCore.Identity
+@rendermode InteractiveServer
+@implements IDisposable
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject SignInManager<ApplicationUser> SignInManager
+@inject AuthenticationStateProvider AuthProvider
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -12,56 +16,63 @@
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="auth">
-                <span class="bi bi-lock-nav-menu" aria-hidden="true"></span> Auth Required
-            </NavLink>
-        </div>
-
+        <!-- Основные пункты меню -->
         <AuthorizeView>
             <Authorized>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Manage">
-                        <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> @context.User.Identity?.Name
+                    <NavLink class="nav-link" href="/books" Match="NavLinkMatch.All">
+                        <span class="bi bi-book" aria-hidden="true"></span> Книги
                     </NavLink>
                 </div>
+
                 <div class="nav-item px-3">
-                    <form action="Account/Logout" method="post">
-                        <AntiforgeryToken />
-                        <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                        <button type="submit" class="nav-link">
-                            <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Logout
-                        </button>
-                    </form>
+                    <NavLink class="nav-link" href="/authors">
+                        <span class="bi bi-person-badge" aria-hidden="true"></span> Авторы
+                    </NavLink>
                 </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/genres">
+                        <span class="bi bi-list-ul" aria-hidden="true"></span> Жанры
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <!-- Пункты меню для администраторов -->
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/users">
+                        <span class="bi bi-people" aria-hidden="true"></span> Пользователи
+                    </NavLink>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        <!-- Управление аккаунтом -->
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="/account">
+                        <span class="bi bi-person-circle" aria-hidden="true"></span> Профиль
+                    </NavLink>
+                </div>
+                    <div class="nav-item px-3">
+                        <button @onclick="NavigateToLogout" class="nav-link btn btn-link">
+                            <span class="bi bi-box-arrow-right"></span> Выйти
+                        </button>
+                    </div>
             </Authorized>
             <NotAuthorized>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Register">
-                        <span class="bi bi-person-nav-menu" aria-hidden="true"></span> Register
+                    <NavLink class="nav-link" href="/account/register">
+                        <span class="bi bi-person-plus" aria-hidden="true"></span> Регистрация
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Login">
-                        <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Login
+                    <NavLink class="nav-link" href="/account/login">
+                        <span class="bi bi-box-arrow-in-right" aria-hidden="true"></span> Вход
                     </NavLink>
                 </div>
             </NotAuthorized>
@@ -72,21 +83,24 @@
 @code {
     private string? currentUrl;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
-        NavigationManager.LocationChanged += OnLocationChanged;
+        AuthProvider.AuthenticationStateChanged += UpdateState;
     }
 
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    private async void UpdateState(Task<AuthenticationState> task)
     {
-        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
-        StateHasChanged();
+        await InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()
     {
-        NavigationManager.LocationChanged -= OnLocationChanged;
+        AuthProvider.AuthenticationStateChanged -= UpdateState;
+    }
+
+
+    private void NavigateToLogout()
+    {
+        Navigation.NavigateTo("/logout", forceLoad: true);
     }
 }
-

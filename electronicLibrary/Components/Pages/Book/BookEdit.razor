@@ -1,0 +1,206 @@
+﻿@page "/books/add"
+@page "/books/edit/{id:int}"
+@attribute [Authorize(Roles = "Librarian")]
+@rendermode InteractiveServer
+@inject IBookService BookService
+@inject IAuthorService AuthorService
+@inject IGenreService GenreService
+@inject NavigationManager Navigation
+
+<PageTitle>@(IsEditMode ? "Редактирование книги" : "Добавление новой книги")</PageTitle>
+
+<h3>@(IsEditMode ? "Редактирование книги" : "Добавление новой книги")</h3>
+
+<EditForm Model="book" OnValidSubmit="SaveBook">
+    <InputNumber @bind-Value="book.Id" hidden />
+
+    <div class="form-group">
+        <label for="title">Название:</label>
+        <InputText @bind-Value="book.Title" id="title" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label for="isbn">ISBN:</label>
+        <InputText @bind-Value="book.ISBN" id="isbn" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label>Издательство:</label>
+        <InputText @bind-Value="book.Publisher" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label>Год издания:</label>
+        <InputNumber @bind-Value="book.Year" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label>Количество страниц:</label>
+        <InputNumber @bind-Value="book.Pages" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label>Язык:</label>
+        <InputText @bind-Value="book.Language" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label>Описание:</label>
+        <InputTextArea @bind-Value="book.Description" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label>Количество экземпляров:</label>
+        <InputNumber @bind-Value="book.TotalCopies" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label>Количество доступных экземпляров:</label>
+        <InputNumber @bind-Value="book.AvailableCopies" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label>Авторы:</label>
+        @if (allAuthors == null)
+        {
+            <p>Загрузка авторов...</p>
+        }
+        else
+        {
+            <div class="author-checkboxes">
+                @foreach (var author in allAuthors)
+                {
+                    <div class="form-check">
+                        <input type="checkbox"
+                               checked="@selectedAuthorsDict[author.Id]"
+                               @onchange="@(e => ToggleAuthor(author.Id, e.Value))"
+                               id="author-@author.Id"
+                               class="form-check-input" />
+                        <label for="author-@author.Id" class="form-check-label">@author.FullName</label>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="form-group">
+        <label>Жанры:</label>
+        @if (allGenres == null)
+        {
+            <p>Загрузка жанров...</p>
+        }
+        else
+        {
+            <div class="genre-checkboxes">
+                @foreach (var genre in allGenres)
+                {
+                    <div class="form-check">
+                        <input type="checkbox"
+                               checked="@selectedGenresDict[genre.Id]"
+                               @onchange="@(e => ToggleGenre(genre.Id, e.Value))"
+                               id="genre-@genre.Id"
+                               class="form-check-input" />
+                        <label for="genre-@genre.Id" class="form-check-label">@genre.Name</label>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="form-group mt-3">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <button type="button" @onclick="Cancel" class="btn btn-secondary ms-2">Отмена</button>
+    </div>
+</EditForm>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Book book = new();
+    private List<Author> allAuthors = new();
+    private List<Genre> allGenres = new();
+    private Dictionary<int, bool> selectedAuthorsDict = new();
+    private Dictionary<int, bool> selectedGenresDict = new();
+    private bool IsEditMode => Id != 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        allAuthors = await AuthorService.GetAuthorsAsync();
+        allGenres = await GenreService.GetGenresAsync();
+
+        // Инициализация словарей
+        foreach (var author in allAuthors)
+        {
+            selectedAuthorsDict[author.Id] = false;
+        }
+        foreach (var genre in allGenres)
+        {
+            selectedGenresDict[genre.Id] = false;
+        }
+
+        if (IsEditMode)
+        {
+            book = await BookService.GetBookByIdAsync(Id) ?? new Book();
+
+            var bookAuthors = await BookService.GetBookAuthorsAsync(Id);
+            var bookGenres = await BookService.GetBookGenresAsync(Id);
+
+            foreach (var author in bookAuthors)
+            {
+                selectedAuthorsDict[author.Id] = true;
+            }
+            foreach (var genre in bookGenres)
+            {
+                selectedGenresDict[genre.Id] = true;
+            }
+        }
+    }
+
+    private void ToggleAuthor(int authorId, object isChecked)
+    {
+        selectedAuthorsDict[authorId] = (bool)isChecked;
+    }
+
+    private void ToggleGenre(int genreId, object isChecked)
+    {
+        selectedGenresDict[genreId] = (bool)isChecked;
+    }
+    [HttpPost]
+    [IgnoreAntiforgeryToken]
+    private async Task SaveBook()
+    {
+        try
+        {
+            var selectedAuthorIds = selectedAuthorsDict
+                .Where(kv => kv.Value)
+                .Select(kv => kv.Key)
+                .ToList();
+
+            var selectedGenreIds = selectedGenresDict
+                .Where(kv => kv.Value)
+                .Select(kv => kv.Key)
+                .ToList();
+
+            if (IsEditMode)
+            {
+                await BookService.UpdateBookAsync(book, selectedAuthorIds, selectedGenreIds);
+            }
+            else
+            {
+                await BookService.AddBookAsync(book, selectedAuthorIds, selectedGenreIds);
+            }
+
+            Navigation.NavigateTo("/books");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка сохранения: {ex.Message}");
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/books");
+    }
+}

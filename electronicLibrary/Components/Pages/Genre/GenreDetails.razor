@@ -1,0 +1,97 @@
+﻿@page "/genres/{id:int}"
+@rendermode InteractiveServer
+@inject IGenreService GenreService
+@inject IBookService BookService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthProvider
+
+<PageTitle>@genre?.Name</PageTitle>
+
+@if (genre == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-header">
+            <h3>@genre.Name</h3>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <p><strong>Описание:</strong> @(string.IsNullOrEmpty(genre.Description) ? "Отсутствует" : genre.Description)</p>
+                    <p><strong>Количество книг:</strong> @(books?.Count ?? 0)</p>
+                </div>
+                <div class="col-md-8">
+                    <p><strong>Книги этого жанра:</strong></p>
+                    @if (books?.Any() == true)
+                    {
+                        <ul class="list-group">
+                            @foreach (var book in books)
+                            {
+                                <li class="list-group-item">
+                                    <a href="/books/@book.Id" class="text-decoration-none">
+                                        @book.Title (@book.Year)
+                                    </a>
+                                    @if (book.BookAuthors?.Any() == true)
+                                    {
+                                        <span class="text-muted">
+                                            - @string.Join(", ", book.BookAuthors.Select(ba => ba.Author.FullName))
+                                        </span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <p class="text-muted">Нет книг в этом жанре</p>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="card-footer">
+            <button @onclick="BackToList" class="btn btn-secondary">Назад</button>
+            @if (isLibrarian)
+            {
+                <button @onclick="@(() => Navigation.NavigateTo("/genres/edit/" + genre.Id))"
+                        class="btn btn-warning ms-2">
+                    Редактировать
+                </button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Genre? genre;
+    private List<Book>? books;
+    private bool isLibrarian;
+    private bool isAuthenticated;
+
+    protected override async Task OnInitializedAsync()
+    {
+        genre = await GenreService.GetGenreByIdAsync(Id);
+        if (genre != null)
+        {
+            books = await BookService.GetBooksByGenreAsync(Id);
+        }
+        await CheckUserRole();
+    }
+
+    private void BackToList()
+    {
+        Navigation.NavigateTo("/genres");
+    }
+
+    private async Task CheckUserRole()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
+        isLibrarian = authState.User.IsInRole("Librarian");
+    }
+}

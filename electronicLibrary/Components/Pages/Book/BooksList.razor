@@ -1,0 +1,145 @@
+﻿@page "/books"
+@rendermode InteractiveServer
+@inject IBookService BookService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthProvider
+
+<PageTitle>Список книг</PageTitle>
+
+<h3>Список книг</h3>
+
+<div class="mb-3">
+    <div class="input-group">
+        <input @bind="searchTerm" class="form-control" placeholder="Поиск по названию, автору, ISBN..." />
+        <button @onclick="SearchBooks" class="btn btn-primary">Поиск</button>
+    </div>
+</div>
+@if (isLibrarian)
+{
+	<div class="mt-3">
+		<button @onclick="AddNewBook" class="btn btn-primary">Добавить новую книгу</button>
+	</div>
+}
+@if (books == null)
+{
+    <p>Загрузка...</p>
+}
+else if (!books.Any())
+{
+    <p>Книги не найдены</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Авторы</th>
+                <th>ISBN</th>
+                <th>Год</th>
+                <th>Доступно</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var book in books)
+            {
+                <tr>
+                    <td>@book.Title</td>
+                    <td>
+                        @if (book.BookAuthors?.Any() == true)
+                        {
+                            @string.Join(", ", book.BookAuthors.Select(ba => ba.Author.FullName))
+                        }
+                    </td>
+                    <td>@book.ISBN</td>
+                    <td>@book.Year</td>
+                    <td>@book.AvailableCopies из @book.TotalCopies</td>
+                    <td>
+                        <button @onclick="() => ViewBookDetails(book.Id)" class="btn btn-sm btn-info">Подробнее</button>
+                        @if (isLibrarian)
+                        {
+                            <button @onclick="() => EditBook(book.Id)" class="btn btn-sm btn-warning ms-1">Редактировать</button>
+                            <button @onclick="() => DeleteBook(book.Id)" class="btn btn-sm btn-danger ms-1">Удалить </button>
+                        }
+                        @if (isUser && book.AvailableCopies > 0)
+                        {
+                            <button @onclick="() => LoanBook(book.Id)" class="btn btn-sm btn-success ms-1">Взять книгу</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+
+@code {
+    private List<Book> books = new();
+    private string searchTerm = string.Empty;
+    private bool isLibrarian;
+    private bool isUser;
+    private bool isAuthenticated;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBooks();
+        await CheckUserRole();
+    }
+
+    private async Task LoadBooks()
+    {
+        books = await BookService.GetBooksAsync();
+    }
+
+    private async Task SearchBooks()
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            await LoadBooks();
+        }
+        else
+        {
+            books = await BookService.SearchBooksAsync(searchTerm);
+        }
+    }
+    private async Task DeleteBook(int id)
+    {
+        try
+        {
+            await BookService.DeleteBookAsync(id);
+            await LoadBooks();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при удалении: {ex.Message}");
+        }
+    }
+    private void ViewBookDetails(int bookId)
+    {
+        Navigation.NavigateTo($"/books/{bookId}");
+    }
+
+    private void EditBook(int bookId)
+    {
+        Navigation.NavigateTo($"/books/edit/{bookId}");
+    }
+
+    private void AddNewBook()
+    {
+        Navigation.NavigateTo("/books/add");
+    }
+
+    private async Task LoanBook(int bookId)
+    {
+        Navigation.NavigateTo($"/books/loan/{bookId}");
+    }
+
+    private async Task CheckUserRole()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
+        isLibrarian = authState.User.IsInRole("Librarian");
+        isUser = authState.User.IsInRole("User");
+    }
+}

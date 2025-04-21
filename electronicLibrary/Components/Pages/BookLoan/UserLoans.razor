@@ -1,0 +1,61 @@
+﻿@page "/users/{userId}/loans"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IBookLoanService LoanService
+@inject AuthenticationStateProvider AuthProvider
+
+<h3>Мои займы</h3>
+
+@if (loans == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Книга</th>
+                <th>Дата выдачи</th>
+                <th>Срок возврата</th>
+                <th>Статус</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var loan in loans)
+            {
+                <tr class="@(loan.IsOverdue ? "table-warning" : "")">
+                    <td>@loan.Book.Title</td>
+                    <td>@loan.LoanDate.ToShortDateString()</td>
+                    <td>@loan.DueDate.ToShortDateString()</td>
+                    <td>
+                        @if (loan.ReturnDate.HasValue)
+                        {
+                            <span class="badge bg-secondary">Возвращена</span>
+                        }
+                        else if (loan.IsOverdue)
+                        {
+                            <span class="badge bg-danger">Просрочена</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-success">Активна</span>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter]
+    public string UserId { get; set; }
+
+    private List<BookLoan> loans = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        loans = await LoanService.GetUserLoansAsync(UserId);
+    }
+}

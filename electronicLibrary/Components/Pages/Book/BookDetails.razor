@@ -1,0 +1,95 @@
+﻿@page "/books/{id:int}"
+@rendermode InteractiveServer
+@inject IBookService BookService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthProvider
+
+<PageTitle>@book?.Title</PageTitle>
+
+@if (book == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-header">
+            <h3>@book.Title</h3>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <p><strong>ISBN:</strong> @book.ISBN</p>
+                    <p><strong>Издательство:</strong> @book.Publisher</p>
+                    <p><strong>Год издания:</strong> @book.Year</p>
+                    <p><strong>Страниц:</strong> @book.Pages</p>
+                    <p><strong>Язык:</strong> @book.Language</p>
+                    <p><strong>Доступно:</strong> @book.AvailableCopies из @book.TotalCopies</p>
+                </div>
+                <div class="col-md-8">
+                    <p>
+                        <strong>Авторы:</strong>
+                        @if (book.BookAuthors?.Any() == true)
+                        {
+                            @string.Join(", ", book.BookAuthors.Select(ba => ba.Author.FullName))
+                        }
+                    </p>
+                    <p>
+                        <strong>Жанры:</strong>
+                        @if (book.BookGenres?.Any() == true)
+                        {
+                            @string.Join(", ", book.BookGenres.Select(bg => bg.Genre.Name))
+                        }
+                    </p>
+                    <p><strong>Описание:</strong></p>
+                    <p>@book.Description</p>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer">
+            <button @onclick="BackToList" class="btn btn-secondary">Назад</button>
+            @if (isLibrarian)
+            {
+                <button @onclick="@(() => Navigation.NavigateTo("/books/edit/" + book.Id))"
+                        class="btn btn-warning ms-2">
+                    Редактировать
+                </button>
+            }
+            @if (isAuthenticated && !isLibrarian && book.AvailableCopies > 0)
+            {
+                <button @onclick="@(() => Navigation.NavigateTo("/books/edit/" + book.Id))"
+                        class="btn btn-success ms-2">
+                    Взять книгу
+                </button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Book? book;
+    private bool isLibrarian;
+    private bool isAuthenticated;
+
+    protected override async Task OnInitializedAsync()
+    {
+        book = await BookService.GetBookByIdAsync(Id);
+        await CheckUserRole();
+    }
+
+    private void BackToList()
+    {
+        Navigation.NavigateTo("/books");
+    }
+
+
+    private async Task CheckUserRole()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
+        isLibrarian = authState.User.IsInRole("Librarian");
+    }
+}

@@ -1,0 +1,37 @@
+﻿@page "/account"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject AuthenticationStateProvider AuthProvider
+@inject IUserService UserService
+@inject IBookLoanService BookLoanService
+@inject NavigationManager Navigation
+
+<PageTitle>Мой аккаунт</PageTitle>
+
+<AuthorizeView Roles="Admin">
+    <Authorized>
+        <AdminDashboard />
+    </Authorized>
+</AuthorizeView>
+
+<AuthorizeView Roles="Librarian">
+    <Authorized>
+        <LibrarianDashboard />
+    </Authorized>
+</AuthorizeView>
+
+<AuthorizeView Roles="User">
+    <Authorized>
+        <UserDashboard />
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private string? userId;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    }
+}

@@ -1,0 +1,136 @@
+﻿@page "/genres"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IGenreService GenreService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthProvider
+
+<PageTitle>Жанры</PageTitle>
+
+<h3>Список жанров</h3>
+
+
+<div class="mb-3">
+    <div class="input-group">
+        <input @bind="searchTerm" class="form-control" placeholder="Поиск по названию..." />
+        <button @onclick="SearchGenres" class="btn btn-primary">Поиск</button>
+    </div>
+</div>
+
+@if (isLibrarian)
+{
+    <div class="mb-3">
+        <button @onclick="AddNewGenre" class="btn btn-primary">Добавить жанр</button>
+    </div>
+}
+@if (genres == null)
+{
+    <p>Загрузка...</p>
+}
+else if (!genres.Any())
+{
+    <p>Жанры не найдены</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Количество книг</th>
+                <th>Описание</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var genre in genres)
+            {
+                <tr>
+                    <td>@genre.Name</td>
+                    <td>@(genre.BookGenres?.Count ?? 0)</td>
+                    <td>@(genre.Description ?? "-")</td>
+                    <td>
+                        <button @onclick="() => ViewGenre(genre.Id)"
+                                class="btn btn-sm btn-info">
+                            Просмотр
+                        </button>
+                        @if (isLibrarian)
+                        {
+                            <button @onclick="() => EditGenre(genre.Id)"
+                                    class="btn btn-sm btn-warning ms-1">
+                                Редактировать
+                            </button>
+                            <button @onclick="() => DeleteGenre(genre.Id)"
+                                    class="btn btn-sm btn-danger ms-1">
+                                Удалить
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Genre> genres = new();
+    private string searchTerm = string.Empty;
+    private bool isLibrarian;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadGenres();
+        await CheckUserRole();
+    }
+
+    private async Task LoadGenres()
+    {
+        genres = await GenreService.GetGenresAsync();
+    }
+
+    private async Task SearchGenres()
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            await LoadGenres();
+        }
+        else
+        {
+            genres = await GenreService.SearchGenresAsync(searchTerm);
+        }
+    }
+
+    private void ViewGenre(int id)
+    {
+        Navigation.NavigateTo($"/genres/{id}");
+    }
+
+    private void EditGenre(int id)
+    {
+        Navigation.NavigateTo($"/genres/edit/{id}");
+    }
+
+    private async Task DeleteGenre(int id)
+    {
+        try
+        {
+            await GenreService.DeleteGenreAsync(id);
+            await LoadGenres();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при удалении: {ex.Message}");
+        }
+    }
+
+    private void AddNewGenre()
+    {
+        Navigation.NavigateTo("/genres/add");
+    }
+
+    private async Task CheckUserRole()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        isLibrarian = authState.User.IsInRole("Librarian");
+    }
+}

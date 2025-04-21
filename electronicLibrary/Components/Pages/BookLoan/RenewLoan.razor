@@ -1,0 +1,58 @@
+﻿@page "/loans/renew/{loanId:int}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IBookLoanService LoanService
+@inject NavigationManager Navigation
+
+<PageTitle>Продление займа</PageTitle>
+
+<h3>Продление займа</h3>
+
+@if (loan == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-header">
+            <h4>@loan.Book.Title</h4>
+        </div>
+        <div class="card-body">
+            <p>Текущий срок возврата: @loan.DueDate.ToShortDateString()</p>
+
+            <div class="form-group mb-3">
+                <label for="days">Дополнительных дней:</label>
+                <input type="number" @bind="additionalDays" id="days" class="form-control" min="1" max="14" />
+            </div>
+        </div>
+        <div class="card-footer">
+            <button @onclick="ProcessRenewal" class="btn btn-primary">Продлить</button>
+            <button @onclick="Cancel" class="btn btn-secondary ms-2">Отмена</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int LoanId { get; set; }
+
+    private BookLoan? loan;
+    private int additionalDays = 7;
+
+    protected override async Task OnInitializedAsync()
+    {
+        loan = await LoanService.GetLoanByIdAsync(LoanId);
+    }
+
+    private async Task ProcessRenewal()
+    {
+        await LoanService.RenewLoanAsync(LoanId, additionalDays);
+        Navigation.NavigateTo("/users/@loan.UserId/loans");
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/users/@loan.UserId/loans");
+    }
+}

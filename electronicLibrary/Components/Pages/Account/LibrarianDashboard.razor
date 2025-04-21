@@ -1,0 +1,29 @@
+﻿@inject IBookLoanService LoanService
+
+<div class="librarian-dashboard">
+    <h3>Панель библиотекаря</h3>
+    
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-warning">
+                    <h5>Активные займы</h5>
+                </div>
+                <div class="card-body">
+                    <ActiveLoansList />
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5>Просроченные займы</h5>
+                </div>
+                <div class="card-body">
+                    <OverdueLoansList />
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

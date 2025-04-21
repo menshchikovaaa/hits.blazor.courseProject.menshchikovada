@@ -1,0 +1,57 @@
+﻿@page "/loans/return/{loanId:int}"
+@attribute [Authorize(Roles = "Librarian")]
+@rendermode InteractiveServer
+@inject IBookLoanService LoanService
+@inject NavigationManager Navigation
+
+<PageTitle>Возврат книги</PageTitle>
+
+<h3>Возврат книги</h3>
+
+@if (loan == null)
+{
+    <p>Загрузка...</p>
+}
+else
+{
+    <div class="card">
+        <div class="card-header">
+            <h4>@loan.Book.Title</h4>
+        </div>
+        <div class="card-body">
+            <p>Читатель: @loan.User.FullName</p>
+            <p>Дата выдачи: @loan.LoanDate.ToShortDateString()</p>
+            <p>Срок возврата: @loan.DueDate.ToShortDateString()</p>
+            <p class="@(loan.IsOverdue ? "text-danger" : "")">
+                Статус: @(loan.IsOverdue ? "Просрочено" : "В срок")
+            </p>
+        </div>
+        <div class="card-footer">
+            <button @onclick="ProcessReturn" class="btn btn-primary">Подтвердить возврат</button>
+            <button @onclick="Cancel" class="btn btn-secondary ms-2">Отмена</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int LoanId { get; set; }
+
+    private BookLoan? loan;
+
+    protected override async Task OnInitializedAsync()
+    {
+        loan = await LoanService.GetLoanByIdAsync(LoanId);
+    }
+
+    private async Task ProcessReturn()
+    {
+        await LoanService.ReturnBookAsync(LoanId);
+        Navigation.NavigateTo("/loans");
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/loans");
+    }
+}
