@@ -1,29 +1,250 @@
 ﻿@inject IBookLoanService LoanService
+@inject IUserService UserService
+
+<PageTitle>Панель библиотекаря</PageTitle>
 
 <div class="librarian-dashboard">
     <h3>Панель библиотекаря</h3>
-    
-    <div class="row mt-4">
+
+    <div class="row mb-3">
         <div class="col-md-6">
-            <div class="card mb-4">
-                <div class="card-header bg-warning">
-                    <h5>Активные займы</h5>
-                </div>
-                <div class="card-body">
-                    <ActiveLoansList />
-                </div>
+            <div class="input-group mb-3">
+                <select @bind="selectedUserId" class="form-select">
+                    <option value="">Все читатели</option>
+                    @foreach (var user in allUsers)
+                    {
+                        <option value="@user.Id">@user.FullName (@user.Email)</option>
+                    }
+                </select>
+                <button @onclick="LoadData" class="btn btn-primary">
+                    Применить фильтр
+                </button>
             </div>
         </div>
-        
         <div class="col-md-6">
+            <div class="form-check form-switch mt-2">
+                <input class="form-check-input" type="checkbox" id="showOverdueOnly" @bind="showOverdueOnly">
+                <label class="form-check-label" for="showOverdueOnly">Только просроченные</label>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-2">
+        <div class="col-md-12">
             <div class="card mb-4">
-                <div class="card-header bg-danger text-white">
-                    <h5>Просроченные займы</h5>
+                <div class="card-header @(showOverdueOnly ? "bg-danger text-white" : "bg-warning")">
+                    <h5>@(showOverdueOnly ? "Просроченные займы" : "Активные займы")</h5>
+                    @if (!string.IsNullOrEmpty(selectedUserId))
+                    {
+                        <span class="badge bg-info ms-2">
+                            Фильтр по читателю: @(allUsers.FirstOrDefault(u => u.Id == selectedUserId)?.FullName)
+                        </span>
+                    }
                 </div>
                 <div class="card-body">
-                    <OverdueLoansList />
+                    @if (loans == null)
+                    {
+                        <p>Загрузка данных...</p>
+                    }
+                    else if (!loans.Any())
+                    {
+                        <p>Нет займов по выбранным критериям</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Книга</th>
+                                        <th>Читатель</th>
+                                        <th>Дата выдачи</th>
+                                        <th>Срок возврата</th>
+                                        <th>Статус</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var loan in loans)
+                                    {
+                                        <tr class="@(loan.IsOverdue ? "table-danger" : "")">
+                                            <td>@loan.Book?.Title</td>
+                                            <td>@loan.User?.FullName</td>
+                                            <td>@loan.LoanDate.ToShortDateString()</td>
+                                            <td>@loan.DueDate.ToShortDateString()</td>
+                                            <td>
+                                                <span>
+                                                    @(loan.IsOverdue ? $"Просрочено на {LoanService.GetOverdueDays(loan)} дн."
+                                                        : $"Осталось {LoanService.GetDaysUntilDue(loan)} дн.")
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <button @onclick="() => ShowReturnDialog(loan)"
+                                                        class="btn btn-sm btn-primary me-2">
+                                                    Вернуть
+                                                </button>
+                                                <button @onclick="() => ShowRenewDialog(loan)"
+                                                        class="btn btn-sm btn-outline-primary">
+                                                    Продлить
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Диалог возврата книги -->
+@if (showReturnDialog && currentLoan != null)
+{
+    <div class="modal" style="display:block; background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Подтверждение возврата</h5>
+                    <button @onclick="CloseReturnDialog" class="btn-close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Вернуть книгу <strong>@currentLoan.Book?.Title</strong>, выданную пользователю <strong>@currentLoan.User?.FullName</strong>?</p>
+                </div>
+                <div class="modal-footer">
+                    <button @onclick="ReturnBook" class="btn btn-primary">
+                        Подтвердить
+                    </button>
+                    <button @onclick="CloseReturnDialog" class="btn btn-secondary">Отмена</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Диалог продления займа -->
+@if (showRenewDialog && currentLoan != null)
+{
+    <div class="modal" style="display:block; background: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Продление займа</h5>
+                    <button @onclick="CloseRenewDialog" class="btn-close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label>Книга: <strong>@currentLoan.Book?.Title</strong></label>
+                    </div>
+                    <div class="mb-3">
+                        <label>Читатель: <strong>@currentLoan.User?.FullName</strong></label>
+                    </div>
+                    <div class="mb-3">
+                        <label>Текущий срок возврата: @currentLoan.DueDate.ToShortDateString()</label>
+                    </div>
+                    <div class="mb-3">
+                        <label for="additionalDays">На сколько дней продлить?</label>
+                        <input type="number" @bind="additionalDays" class="form-control" id="additionalDays" min="1" max="30" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button @onclick="RenewLoan" class="btn btn-primary" disabled="@(additionalDays <= 0)">
+                        Продлить
+                    </button>
+                    <button @onclick="CloseRenewDialog" class="btn btn-secondary">Отмена</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<BookLoan> loans = new();
+    private List<ApplicationUser> allUsers = new();
+    private BookLoan? currentLoan;
+    private bool showReturnDialog;
+    private bool showRenewDialog;
+    private int additionalDays = 7;
+    private string? selectedUserId;
+    private bool showOverdueOnly;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            loans = await LoanService.GetFilteredLoansAsync(selectedUserId, showOverdueOnly);
+            allUsers = await UserService.GetRegularUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка загрузки данных: {ex.Message}";
+        }
+    }
+
+    private void ShowReturnDialog(BookLoan loan)
+    {
+        currentLoan = loan;
+        showReturnDialog = true;
+    }
+
+    private void ShowRenewDialog(BookLoan loan)
+    {
+        currentLoan = loan;
+        additionalDays = 7;
+        showRenewDialog = true;
+    }
+
+    private async Task ReturnBook()
+    {
+        try
+        {
+            if (currentLoan != null)
+            {
+                await LoanService.ReturnBookAsync(currentLoan.Id);
+                await LoadData(); 
+                showReturnDialog = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка при возврате книги: {ex.Message}";
+        }
+    }
+
+    private async Task RenewLoan()
+    {
+        try
+        {
+            if (currentLoan != null && additionalDays > 0)
+            {
+                await LoanService.RenewLoanAsync(currentLoan.Id, additionalDays);
+                await LoadData(); 
+                showRenewDialog = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка при продлении займа: {ex.Message}";
+        }
+    }
+
+    private void CloseReturnDialog()
+    {
+        showReturnDialog = false;
+        currentLoan = null;
+    }
+
+    private void CloseRenewDialog()
+    {
+        showRenewDialog = false;
+        currentLoan = null;
+    }
+}

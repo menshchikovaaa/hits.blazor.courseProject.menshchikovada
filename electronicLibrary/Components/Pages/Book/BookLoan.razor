@@ -81,6 +81,6 @@ else
 
     private void Cancel()
     {
-        Navigation.NavigateTo($"/books/{BookId}");
+        Navigation.NavigateTo($"/books/{BookId}", forceLoad: true);
     }
 }

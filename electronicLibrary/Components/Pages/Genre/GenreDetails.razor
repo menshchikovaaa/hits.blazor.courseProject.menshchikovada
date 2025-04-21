@@ -78,7 +78,7 @@ else
         genre = await GenreService.GetGenreByIdAsync(Id);
         if (genre != null)
         {
-            books = await BookService.GetBooksByGenreAsync(Id);
+            books = await GenreService.GetBooksByGenreAsync(Id);
         }
         await CheckUserRole();
     }

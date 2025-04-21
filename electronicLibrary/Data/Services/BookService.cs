@@ -59,43 +59,16 @@ namespace electronicLibrary.Data.Services
                 .ToListAsync();
         }
 
-        public async Task<List<Book>> GetBooksByAuthorAsync(int authorId)
-        {
-            return await _context.Books
-                .Include(b => b.BookAuthors)
-                .ThenInclude(ba => ba.Author)
-                .Include(b => b.BookGenres)
-                .ThenInclude(bg => bg.Genre)
-                .Where(b => b.BookAuthors.Any(ba => ba.AuthorId == authorId))
-                .AsNoTracking()
-                .ToListAsync();
-        }
-
-        public async Task<List<Book>> GetBooksByGenreAsync(int genreId)
-        {
-            return await _context.Books
-                .Include(b => b.BookAuthors)
-                .ThenInclude(ba => ba.Author)
-                .Include(b => b.BookGenres)
-                .ThenInclude(bg => bg.Genre)
-                .Where(b => b.BookGenres.Any(bg => bg.GenreId == genreId))
-                .AsNoTracking()
-                .ToListAsync();
-        }
-
         public async Task AddBookAsync(Book book, List<int> authorIds, List<int> genreIds)
         {
             if (book == null) throw new ArgumentNullException(nameof(book));
 
-            // Проверка уникальности ISBN
             if (await _context.Books.AnyAsync(b => b.ISBN == book.ISBN))
                 throw new InvalidOperationException("Книга с таким ISBN уже существует");
 
-            // Добавление книги
             await _context.Books.AddAsync(book);
             await _context.SaveChangesAsync();
 
-            // Добавление связей с авторами
             foreach (var authorId in authorIds)
             {
                 if (!await _context.Authors.AnyAsync(a => a.Id == authorId))
@@ -108,7 +81,6 @@ namespace electronicLibrary.Data.Services
                 });
             }
 
-            // Добавление связей с жанрами
             foreach (var genreId in genreIds)
             {
                 if (!await _context.Genres.AnyAsync(g => g.Id == genreId))
@@ -136,17 +108,13 @@ namespace electronicLibrary.Data.Services
             if (existingBook == null)
                 throw new KeyNotFoundException("Книга не найдена");
 
-            // Проверка уникальности ISBN (исключая текущую книгу)
             if (await _context.Books.AnyAsync(b => b.ISBN == book.ISBN && b.Id != book.Id))
                 throw new InvalidOperationException("Книга с таким ISBN уже существует");
 
-            // Обновление свойств книги
             _context.Entry(existingBook).CurrentValues.SetValues(book);
 
-            // Обновление авторов
             UpdateBookAuthors(existingBook, authorIds);
 
-            // Обновление жанров
             UpdateBookGenres(existingBook, genreIds);
 
             await _context.SaveChangesAsync();
@@ -154,7 +122,6 @@ namespace electronicLibrary.Data.Services
 
         private void UpdateBookAuthors(Book book, List<int> authorIds)
         {
-            // Удаление отсутствующих связей
             var authorsToRemove = book.BookAuthors
                 .Where(ba => !authorIds.Contains(ba.AuthorId))
                 .ToList();
@@ -164,7 +131,6 @@ namespace electronicLibrary.Data.Services
                 _context.BookAuthors.Remove(authorToRemove);
             }
 
-            // Добавление новых связей
             var existingAuthorIds = book.BookAuthors.Select(ba => ba.AuthorId).ToList();
             var authorsToAdd = authorIds
                 .Where(id => !existingAuthorIds.Contains(id))
@@ -178,7 +144,6 @@ namespace electronicLibrary.Data.Services
 
         private void UpdateBookGenres(Book book, List<int> genreIds)
         {
-            // Удаление отсутствующих связей
             var genresToRemove = book.BookGenres
                 .Where(bg => !genreIds.Contains(bg.GenreId))
                 .ToList();
@@ -188,7 +153,6 @@ namespace electronicLibrary.Data.Services
                 _context.BookGenres.Remove(genreToRemove);
             }
 
-            // Добавление новых связей
             var existingGenreIds = book.BookGenres.Select(bg => bg.GenreId).ToList();
             var genresToAdd = genreIds
                 .Where(id => !existingGenreIds.Contains(id))
@@ -210,40 +174,11 @@ namespace electronicLibrary.Data.Services
             if (book == null)
                 throw new KeyNotFoundException("Книга не найдена");
 
-            // Проверка на наличие выданных экземпляров
             if (book.TotalCopies != book.AvailableCopies)
                 throw new InvalidOperationException("Нельзя удалить книгу, так как есть выданные экземпляры");
 
             _context.Books.Remove(book);
             await _context.SaveChangesAsync();
-        }
-
-        public async Task<bool> CheckAvailabilityAsync(int bookId)
-        {
-            var book = await _context.Books.FindAsync(bookId);
-            return book?.AvailableCopies > 0;
-        }
-
-        public async Task<int> GetAvailableCopiesCountAsync(int bookId)
-        {
-            var book = await _context.Books.FindAsync(bookId);
-            return book?.AvailableCopies ?? 0;
-        }
-
-        public async Task<List<Author>> GetBookAuthorsAsync(int bookId)
-        {
-            return await _context.BookAuthors
-                .Where(ba => ba.BookId == bookId)
-                .Select(ba => ba.Author)
-                .ToListAsync();
-        }
-
-        public async Task<List<Genre>> GetBookGenresAsync(int bookId)
-        {
-            return await _context.BookGenres
-                .Where(bg => bg.BookId == bookId)
-                .Select(bg => bg.Genre)
-                .ToListAsync();
         }
     }
 }

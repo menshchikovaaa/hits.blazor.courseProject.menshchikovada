@@ -10,8 +10,5 @@ namespace electronicLibrary.Data.interfaces
         Task AddAuthorAsync(Author author);
         Task UpdateAuthorAsync(Author author);
         Task DeleteAuthorAsync(int id);
-        Task<List<Book>> GetBooksByAuthorAsync(int authorId);
-        Task<bool> AuthorExistsAsync(int id);
-        Task<bool> AuthorHasBooksAsync(int authorId);
     }
 }

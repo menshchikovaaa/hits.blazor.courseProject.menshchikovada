@@ -11,8 +11,5 @@ namespace electronicLibrary.Data.interfaces
         Task UpdateGenreAsync(Genre genre);
         Task DeleteGenreAsync(int id);
         Task<List<Book>> GetBooksByGenreAsync(int genreId);
-        Task<bool> GenreExistsAsync(int id);
-        Task<bool> GenreHasBooksAsync(int genreId);
-
     }
 }

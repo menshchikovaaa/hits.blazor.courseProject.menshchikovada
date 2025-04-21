@@ -2,8 +2,7 @@
 @attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
-@inject UserManager<ApplicationUser> UserManager
-@inject RoleManager<IdentityRole> RoleManager
+@inject IUserService UserService
 @inject NavigationManager Navigation
 
 <PageTitle>Управление пользователями</PageTitle>
@@ -161,18 +160,19 @@ else
 
     private async Task LoadUsers()
     {
-        users = await UserManager.Users.ToListAsync();
+        users = await UserService.GetUsersAsync();
         userRoles.Clear();
 
         foreach (var user in users)
         {
-            userRoles[user.Id] = (await UserManager.GetRolesAsync(user)).ToList();
+            userRoles[user.Id] = (await UserService.GetUserRolesAsync(user.Id)).ToList();
         }
     }
 
     private async Task LoadRoles()
     {
-        allRoles = await RoleManager.Roles.ToListAsync();
+        await UserService.EnsureRolesExistAsync();
+        allRoles = (await UserService.GetAllRolesAsync()).ToList();
     }
 
     private void ShowCreateDialog()
@@ -195,11 +195,13 @@ else
                 FullName = newUser.FullName
             };
 
-        var result = await UserManager.CreateAsync(user, newUser.Password);
+        var result = await UserService.CreateUserAsync(user, newUser.Password);
 
         if (result.Succeeded)
         {
-            await UserManager.AddToRoleAsync(user, newUser.SelectedRole);
+            await UserService.UpdateUserRolesAsync(user.Id,
+                new List<string> { newUser.SelectedRole },
+                new List<string>());
             await LoadUsers();
             showCreateDialog = false;
         }
@@ -221,16 +223,11 @@ else
     {
         try
         {
-            if ((bool)isChecked)
-            {
-                await UserManager.AddToRoleAsync(user, roleName);
-            }
-            else
-            {
-                await UserManager.RemoveFromRoleAsync(user, roleName);
-            }
+            var rolesToAdd = (bool)isChecked ? new List<string> { roleName } : new List<string>();
+            var rolesToRemove = (bool)isChecked ? new List<string>() : new List<string> { roleName };
 
-            userRoles[user.Id] = (await UserManager.GetRolesAsync(user)).ToList();
+            await UserService.UpdateUserRolesAsync(user.Id, rolesToAdd, rolesToRemove);
+            userRoles[user.Id] = (await UserService.GetUserRolesAsync(user.Id)).ToList();
         }
         catch (Exception ex)
         {

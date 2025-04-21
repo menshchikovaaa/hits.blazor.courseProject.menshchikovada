@@ -52,7 +52,6 @@ namespace electronicLibrary.Data.Services
             if (genre == null)
                 throw new ArgumentNullException(nameof(genre));
 
-            // Проверка на уникальность имени
             if (await _context.Genres.AnyAsync(g => g.Name == genre.Name))
                 throw new InvalidOperationException("Жанр с таким названием уже существует");
 
@@ -69,7 +68,6 @@ namespace electronicLibrary.Data.Services
             if (existingGenre == null)
                 throw new KeyNotFoundException("Жанр не найден");
 
-            // Проверка на уникальность имени
             if (await _context.Genres.AnyAsync(g => g.Name == genre.Name && g.Id != genre.Id))
                 throw new InvalidOperationException("Жанр с таким названием уже существует");
 
@@ -103,16 +101,6 @@ namespace electronicLibrary.Data.Services
                 .Select(bg => bg.Book)
                 .AsNoTracking()
                 .ToListAsync();
-        }
-
-        public async Task<bool> GenreExistsAsync(int id)
-        {
-            return await _context.Genres.AnyAsync(g => g.Id == id);
-        }
-
-        public async Task<bool> GenreHasBooksAsync(int genreId)
-        {
-            return await _context.BookGenres.AnyAsync(bg => bg.GenreId == genreId);
         }
     }
 }

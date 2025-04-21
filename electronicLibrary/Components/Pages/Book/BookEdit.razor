@@ -142,14 +142,11 @@
         {
             book = await BookService.GetBookByIdAsync(Id) ?? new Book();
 
-            var bookAuthors = await BookService.GetBookAuthorsAsync(Id);
-            var bookGenres = await BookService.GetBookGenresAsync(Id);
-
-            foreach (var author in bookAuthors)
+            foreach (var author  in book.BookAuthors.Select(ba => ba.Author))
             {
                 selectedAuthorsDict[author.Id] = true;
             }
-            foreach (var genre in bookGenres)
+            foreach (var genre in book.BookGenres.Select(bg => bg.Genre))
             {
                 selectedGenresDict[genre.Id] = true;
             }

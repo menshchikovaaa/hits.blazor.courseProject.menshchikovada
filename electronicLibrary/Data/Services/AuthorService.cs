@@ -93,28 +93,6 @@ namespace electronicLibrary.Data.Services
             _context.Authors.Remove(author);
             await _context.SaveChangesAsync();
         }
-
-        public async Task<List<Book>> GetBooksByAuthorAsync(int authorId)
-        {
-            return await _context.BookAuthors
-                .Where(ba => ba.AuthorId == authorId)
-                .Include(ba => ba.Book)
-                .ThenInclude(b => b.BookAuthors)
-                .ThenInclude(ba => ba.Author)
-                .Select(ba => ba.Book)
-                .AsNoTracking()
-                .ToListAsync();
-        }
-
-        public async Task<bool> AuthorExistsAsync(int id)
-        {
-            return await _context.Authors.AnyAsync(a => a.Id == id);
-        }
-
-        public async Task<bool> AuthorHasBooksAsync(int authorId)
-        {
-            return await _context.BookAuthors.AnyAsync(ba => ba.AuthorId == authorId);
-        }
     }
 }
 
