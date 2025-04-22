@@ -17,10 +17,12 @@ namespace electronicLibrary.Data.Services
 
         public async Task<List<BookLoan>> GetFilteredLoansAsync(string? userId = null, bool overdueOnly = false)
         {
+            var now = DateTime.UtcNow;
             var query = _context.BookLoans
                 .Include(bl => bl.Book)
                 .Include(bl => bl.User)
-                .Where(bl => !bl.ReturnDate.HasValue); 
+                .Where(bl => !bl.ReturnDate.HasValue)
+                .AsQueryable();
 
             if (!string.IsNullOrEmpty(userId))
             {
@@ -29,17 +31,17 @@ namespace electronicLibrary.Data.Services
 
             if (overdueOnly)
             {
-                query = query.Where(bl => bl.IsOverdue);
+                query = query.Where(bl => bl.DueDate < now);
             }
 
             return await query
-                .OrderByDescending(bl => bl.IsOverdue)
+                .OrderByDescending(bl => bl.DueDate < now) 
                 .ThenBy(bl => bl.DueDate)
                 .AsNoTracking()
                 .ToListAsync();
         }
 
-        public async Task<BookLoan> LoanBookAsync(int bookId, string userId, int loanDays)
+        public async Task<BookLoan> LoanBookAsync(int bookId, string userId, int loanDays, bool skipReservationCheck = false)
         {
             if (loanDays <= 0)
                 throw new ArgumentException("Loan period must be positive", nameof(loanDays));
@@ -51,8 +53,17 @@ namespace electronicLibrary.Data.Services
             if (book.AvailableCopies <= 0)
                 throw new InvalidOperationException("No available copies of this book");
 
-            if (await HasUserBorrowedBookAsync(userId, bookId))
+            if (!skipReservationCheck && await HasUserBorrowedBookAsync(userId, bookId))
                 throw new InvalidOperationException("User already has this book");
+
+            if (!skipReservationCheck)
+            {
+                var activeReservations = await _context.BookReservations
+                    .AnyAsync(r => r.BookId == bookId && r.IsActive && r.UserId != userId);
+
+                if (activeReservations)
+                    throw new InvalidOperationException("This book is reserved by another user");
+            }
 
             var loan = new BookLoan
             {
@@ -63,11 +74,8 @@ namespace electronicLibrary.Data.Services
             };
 
             await _context.BookLoans.AddAsync(loan);
-
-            // Обновляем количество доступных книг
             book.AvailableCopies--;
             _context.Books.Update(book);
-
             await _context.SaveChangesAsync();
 
             return loan;

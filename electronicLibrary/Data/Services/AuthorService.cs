@@ -53,7 +53,6 @@ namespace electronicLibrary.Data.Services
             if (author == null)
                 throw new ArgumentNullException(nameof(author));
 
-            // Проверка на уникальность имени (опционально)
             if (await _context.Authors.AnyAsync(a => a.FullName == author.FullName))
                 throw new InvalidOperationException("Автор с таким именем уже существует");
 
@@ -70,7 +69,6 @@ namespace electronicLibrary.Data.Services
             if (existingAuthor == null)
                 throw new KeyNotFoundException("Автор не найден");
 
-            // Проверка на уникальность имени (опционально)
             if (await _context.Authors.AnyAsync(a => a.FullName == author.FullName && a.Id != author.Id))
                 throw new InvalidOperationException("Автор с таким именем уже существует");
 

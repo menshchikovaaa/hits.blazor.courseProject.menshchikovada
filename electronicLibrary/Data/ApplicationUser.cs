@@ -9,6 +9,8 @@ namespace electronicLibrary.Data
         public DateTime RegistrationDate { get; set; } = DateTime.UtcNow;
 
         public List<BookLoan> BookLoans { get; set; } = [];
+
+        public List<BookReservation> BookReservations { get; set; } = [];
     }
 
 }

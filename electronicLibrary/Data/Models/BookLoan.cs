@@ -1,4 +1,6 @@
-﻿namespace electronicLibrary.Data.Models
+﻿using System.ComponentModel.DataAnnotations.Schema;
+
+namespace electronicLibrary.Data.Models
 {
     public class BookLoan
     {
@@ -20,6 +22,9 @@
             set => _returnDate = value > LoanDate ? value : throw new ArgumentException("Return date cannot be before loan date");
         }
         public DateTime DueDate { get; set; }
+                
+        
+        [NotMapped]
         public bool IsOverdue => DateTime.Now > DueDate && !ReturnDate.HasValue;
     }
 }

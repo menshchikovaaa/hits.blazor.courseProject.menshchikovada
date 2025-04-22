@@ -1,4 +1,5 @@
 ﻿@inject IBookLoanService BookLoanService
+@inject IBookReservationService ReservationService
 @inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Navigation
 @using System.Security.Claims
@@ -62,11 +63,67 @@ else
                                             class="btn btn-sm btn-outline-primary">
                                         Продлить
                                     </button>
-                                    <button @onclick="() => ShowReturnDialog(loan)"
-                                            class="btn btn-sm btn-primary">
-                                        Вернуть
-                                    </button>
                                 </div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<h3>Мои бронирования</h3>
+
+@if (reservations == null)
+{
+    <p>Загрузка данных...</p>
+}
+else if (!reservations.Any())
+{
+    <p>У вас нет активных бронирований</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Название книги</th>
+                    <th>Дата бронирования</th>
+                    <th>Действительно до</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var reservation in reservations)
+                {
+                    <tr class="@(reservation.ExpiryDate < DateTime.UtcNow ? "table-warning" : "")">
+                        <td>@reservation.Book?.Title</td>
+                        <td>@reservation.ReservationDate.ToShortDateString()</td>
+                        <td>@reservation.ExpiryDate.ToShortDateString()</td>
+                        <td>
+                            @if (!reservation.IsActive)
+                            {
+                                <span class="badge bg-secondary">Отменена</span>
+                            }
+                            else if (reservation.ExpiryDate < DateTime.UtcNow)
+                            {
+                                <span class="badge bg-danger">Просрочена</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success">Активна</span>
+                            }
+                        </td>
+                        <td>
+                            @if (reservation.IsActive)
+                            {
+                                <button @onclick="() => CancelReservation(reservation.Id)"
+                                        class="btn btn-sm btn-danger">
+                                    Отменить
+                                </button>
                             }
                         </td>
                     </tr>
@@ -109,36 +166,10 @@ else
     </div>
 }
 
-<!-- Диалог возврата книги -->
-@if (showReturnDialog && currentLoan != null)
-{
-    <div class="modal" style="display:block; background: rgba(0,0,0,0.5);">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Подтверждение возврата</h5>
-                    <button @onclick="CloseReturnDialog" class="btn-close"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Вы действительно хотите вернуть книгу <strong>@currentLoan.Book?.Title</strong>?</p>
-                    <div class="form-check mt-3">
-                        <input class="form-check-input" type="checkbox" @bind="confirmGoodCondition">
-                        <label class="form-check-label">Подтверждаю, что книга в хорошем состоянии</label>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button @onclick="ReturnBook" class="btn btn-primary" disabled="@(!confirmGoodCondition)">
-                        Подтвердить возврат
-                    </button>
-                    <button @onclick="CloseReturnDialog" class="btn btn-secondary">Отмена</button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
 
 @code {
     private List<BookLoan> loans = new();
+    private List<BookReservation> reservations = new();
     private BookLoan? currentLoan;
     private bool showReturnDialog;
     private bool showRenewDialog;
@@ -159,7 +190,7 @@ else
                 errorMessage = "Не удалось идентифицировать пользователя";
                 return;
             }
-
+            await LoadUserReservations();
             await LoadUserLoans();
         }
         catch (Exception ex)
@@ -187,26 +218,6 @@ else
         additionalDays = 7;
     }
 
-    private async Task ReturnBook()
-    {
-        try
-        {
-            if (currentLoan == null) return;
-
-            var returnedLoan = await BookLoanService.ReturnBookAsync(currentLoan.Id, userId);
-            if (returnedLoan != null)
-            {
-                await LoadUserLoans();
-                showReturnDialog = false;
-            }
-            Navigation.NavigateTo($"/account", forceLoad: true);
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Ошибка при возврате книги: {ex.Message}";
-        }
-    }
-
     private async Task RenewLoan()
     {
         try
@@ -226,15 +237,30 @@ else
         }
     }
 
-    private void CloseReturnDialog()
-    {
-        showReturnDialog = false;
-        currentLoan = null;
-    }
-
     private void CloseRenewDialog()
     {
         showRenewDialog = false;
         currentLoan = null;
+    }
+    
+    private async Task LoadUserReservations()
+    {
+        if (!string.IsNullOrEmpty(userId))
+        {
+            reservations = await ReservationService.GetUserReservationsAsync(userId);
+        }
+    }
+
+    private async Task CancelReservation(int reservationId)
+    {
+        try
+        {
+            await ReservationService.CancelReservationAsync(reservationId);
+            await LoadUserReservations();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка при отмене брони: {ex.Message}";
+        }
     }
 }

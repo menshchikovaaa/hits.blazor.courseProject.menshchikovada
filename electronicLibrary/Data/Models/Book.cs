@@ -18,5 +18,6 @@ namespace electronicLibrary.Data.Models
         public List<BookAuthor> BookAuthors { get; set; } = new();
         public List<BookGenre> BookGenres { get; set; } = new();
         public List<BookLoan> BookLoans { get; set; } = new();
+        public List<BookReservation> BookReservations { get; set; } = new();
     }
 }

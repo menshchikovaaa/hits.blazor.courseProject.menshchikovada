@@ -15,6 +15,7 @@ namespace electronicLibrary.Data
         public DbSet<BookLoan> BookLoans { get; set; }
         public DbSet<BookAuthor> BookAuthors { get; set; }
         public DbSet<BookGenre> BookGenres { get; set; }
+        public DbSet<BookReservation> BookReservations { get; set; }
 
 
         protected override void OnModelCreating(ModelBuilder builder)
@@ -31,6 +32,19 @@ namespace electronicLibrary.Data
                 entity.HasOne(bl => bl.Book)
                       .WithMany(b => b.BookLoans)
                       .HasForeignKey(bl => bl.BookId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            builder.Entity<BookReservation>(entity =>
+            {
+                entity.HasOne(br => br.User)
+                      .WithMany(u => u.BookReservations)
+                      .HasForeignKey(br => br.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(br => br.Book)
+                      .WithMany(b => b.BookReservations)
+                      .HasForeignKey(br => br.BookId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 

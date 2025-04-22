@@ -1,14 +1,14 @@
-﻿@page "/books/loan/{bookId:int}"
+﻿@page "/books/reserve/{bookId:int}"
 @attribute [Authorize]
 @rendermode InteractiveServer
-@inject IBookLoanService LoanService
+@inject IBookReservationService ReservationService
 @inject IBookService BookService
-@inject IUserService UserService
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
-<PageTitle>Выдача книги</PageTitle>
+<PageTitle>Бронирование книги</PageTitle>
 
-<h3>Выдача книги</h3>
+<h3>Бронирование книги</h3>
 
 @if (book == null)
 {
@@ -22,23 +22,14 @@ else
         </div>
         <div class="card-body">
             <p>Доступно экземпляров: @book.AvailableCopies</p>
+
             <div class="form-group mb-3">
-                <label for="userSelect">Читатель:</label>
-                <select @bind="selectedUserId" class="form-select" id="userSelect">
-                    <option value="">Выберите читателя</option>
-                    @foreach (var user in users)
-                    {
-                        <option value="@user.Id">@user.FullName (@user.Email)</option>
-                    }
-                </select>
-            </div>
-            <div class="form-group mb-3">
-                <label for="days">На сколько дней:</label>
-                <input type="number" @bind="loanDays" id="days" class="form-control" min="1" max="30" />
+                <label for="days">На сколько дней бронировать (макс. 7):</label>
+                <input type="number" @bind="reserveDays" id="days" class="form-control" min="1" max="7" />
             </div>
         </div>
         <div class="card-footer">
-            <button @onclick="ProcessLoan" class="btn btn-primary">Оформить</button>
+            <button @onclick="ProcessReservation" class="btn btn-primary">Забронировать</button>
             <button @onclick="Cancel" class="btn btn-secondary ms-2">Отмена</button>
         </div>
     </div>
@@ -54,9 +45,7 @@ else
     public int BookId { get; set; }
 
     private Book? book;
-    private List<ApplicationUser> users = new();
-    private string? selectedUserId;
-    private int loanDays = 14;
+    private int reserveDays = 3;
     private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
@@ -66,26 +55,28 @@ else
         {
             errorMessage = "Книга не найдена";
         }
-        users = await UserService.GetRegularUsersAsync();
     }
 
-    private async Task ProcessLoan()
+    private async Task ProcessReservation()
     {
         try
         {
-            if (string.IsNullOrEmpty(selectedUserId))
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userId))
             {
-                errorMessage = "Выберите читателя";
+                errorMessage = "Пользователь не идентифицирован";
                 return;
             }
 
-            if (loanDays <= 0)
+            if (reserveDays < 1 || reserveDays > 7)
             {
-                errorMessage = "Укажите корректный срок выдачи";
+                errorMessage = "Срок бронирования должен быть от 1 до 7 дней";
                 return;
             }
 
-            await LoanService.LoanBookAsync(BookId, selectedUserId, loanDays, true);
+            await ReservationService.ReserveBookAsync(BookId, userId, reserveDays);
             Navigation.NavigateTo($"/books/{BookId}");
         }
         catch (Exception ex)

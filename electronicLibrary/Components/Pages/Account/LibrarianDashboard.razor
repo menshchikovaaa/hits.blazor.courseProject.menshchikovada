@@ -1,11 +1,12 @@
 ﻿@inject IBookLoanService LoanService
 @inject IUserService UserService
+@inject IBookReservationService ReservationService
 
 <PageTitle>Панель библиотекаря</PageTitle>
 
 <div class="librarian-dashboard">
     <h3>Панель библиотекаря</h3>
-
+    <!-- Фильтры -->
     <div class="row mb-3">
         <div class="col-md-6">
             <div class="input-group mb-3">
@@ -16,7 +17,7 @@
                         <option value="@user.Id">@user.FullName (@user.Email)</option>
                     }
                 </select>
-                <button @onclick="LoadData" class="btn btn-primary">
+                <button @onclick="ApplyFilter" class="btn btn-primary">
                     Применить фильтр
                 </button>
             </div>
@@ -29,7 +30,73 @@
         </div>
     </div>
 
-    <div class="row mt-2">
+    <!-- Секция бронирований -->
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5>Активные бронирования</h5>
+                    @if (!string.IsNullOrEmpty(selectedUserId))
+                    {
+                        <span class="badge bg-info ms-2">
+                            Фильтр: @(allUsers.FirstOrDefault(u => u.Id == selectedUserId)?.FullName)
+                        </span>
+                    }
+                </div>
+                <div class="card-body">
+                    @if (reservations == null)
+                    {
+                        <p>Загрузка данных...</p>
+                    }
+                    else if (!reservations.Any())
+                    {
+                        <p>Нет активных бронирований</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Книга</th>
+                                        <th>Читатель</th>
+                                        <th>Дата бронирования</th>
+                                        <th>Действительно до</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var reservation in reservations)
+                                    {
+                                        <tr class="@(reservation.ExpiryDate < DateTime.UtcNow ? "table-warning" : "")">
+                                            <td>@reservation.Book?.Title</td>
+                                            <td>@reservation.User?.FullName</td>
+                                            <td>@reservation.ReservationDate.ToShortDateString()</td>
+                                            <td>@reservation.ExpiryDate.ToShortDateString()</td>
+                                            <td>
+                                                <button @onclick="() => IssueBook(reservation)"
+                                                class="btn btn-sm btn-success me-2"
+                                                disabled="@(reservation.Book?.AvailableCopies <= 0)">
+                                                    Выдать
+                                                </button>
+                                                <button @onclick="() => CancelReservation(reservation)"
+                                                class="btn btn-sm btn-danger">
+                                                    Отменить
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Секция займов -->
+    <div class="row mt-4">
         <div class="col-md-12">
             <div class="card mb-4">
                 <div class="card-header @(showOverdueOnly ? "bg-danger text-white" : "bg-warning")">
@@ -37,7 +104,7 @@
                     @if (!string.IsNullOrEmpty(selectedUserId))
                     {
                         <span class="badge bg-info ms-2">
-                            Фильтр по читателю: @(allUsers.FirstOrDefault(u => u.Id == selectedUserId)?.FullName)
+                            Фильтр: @(allUsers.FirstOrDefault(u => u.Id == selectedUserId)?.FullName)
                         </span>
                     }
                 </div>
@@ -75,16 +142,16 @@
                                             <td>
                                                 <span>
                                                     @(loan.IsOverdue ? $"Просрочено на {LoanService.GetOverdueDays(loan)} дн."
-                                                        : $"Осталось {LoanService.GetDaysUntilDue(loan)} дн.")
+                                                            : $"Осталось {LoanService.GetDaysUntilDue(loan)} дн.")
                                                 </span>
                                             </td>
                                             <td>
                                                 <button @onclick="() => ShowReturnDialog(loan)"
-                                                        class="btn btn-sm btn-primary me-2">
+                                                class="btn btn-sm btn-primary me-2">
                                                     Вернуть
                                                 </button>
                                                 <button @onclick="() => ShowRenewDialog(loan)"
-                                                        class="btn btn-sm btn-outline-primary">
+                                                class="btn btn-sm btn-outline-primary">
                                                     Продлить
                                                 </button>
                                             </td>
@@ -99,6 +166,7 @@
         </div>
     </div>
 </div>
+
 
 <!-- Диалог возврата книги -->
 @if (showReturnDialog && currentLoan != null)
@@ -163,6 +231,7 @@
 @code {
     private List<BookLoan> loans = new();
     private List<ApplicationUser> allUsers = new();
+    private List<BookReservation> reservations = new();
     private BookLoan? currentLoan;
     private bool showReturnDialog;
     private bool showRenewDialog;
@@ -170,22 +239,61 @@
     private string? selectedUserId;
     private bool showOverdueOnly;
     private string? errorMessage;
+    private bool isLoading;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadData();
+        try
+        {
+            allUsers = await UserService.GetRegularUsersAsync();
+
+            await ApplyFilter(); 
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка инициализации: {ex}");
+            errorMessage = $"Ошибка загрузки: {ex.Message}";
+        }
     }
 
-    private async Task LoadData()
+    private async Task LoadInitialData()
     {
+        isLoading = true;
+        try
+        {
+            allUsers = await UserService.GetRegularUsersAsync();
+            await ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка инициализации: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ApplyFilter()
+    {
+        isLoading = true;
+        StateHasChanged();
+
         try
         {
             loans = await LoanService.GetFilteredLoansAsync(selectedUserId, showOverdueOnly);
-            allUsers = await UserService.GetRegularUsersAsync();
+            reservations = await ReservationService.GetFilteredReservationsAsync(selectedUserId);
         }
         catch (Exception ex)
         {
             errorMessage = $"Ошибка загрузки данных: {ex.Message}";
+            loans = new List<BookLoan>();
+            reservations = new List<BookReservation>();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
         }
     }
 
@@ -209,7 +317,7 @@
             if (currentLoan != null)
             {
                 await LoanService.ReturnBookAsync(currentLoan.Id);
-                await LoadData(); 
+                await ApplyFilter();
                 showReturnDialog = false;
             }
         }
@@ -226,7 +334,7 @@
             if (currentLoan != null && additionalDays > 0)
             {
                 await LoanService.RenewLoanAsync(currentLoan.Id, additionalDays);
-                await LoadData(); 
+                await ApplyFilter();
                 showRenewDialog = false;
             }
         }
@@ -246,5 +354,32 @@
     {
         showRenewDialog = false;
         currentLoan = null;
+    }
+
+    private async Task IssueBook(BookReservation reservation)
+    {
+        try
+        {
+            await LoanService.LoanBookAsync(reservation.BookId, reservation.UserId, 14);
+            await ReservationService.CancelReservationAsync(reservation.Id);
+            await ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка при выдаче книги: {ex.Message}";
+        }
+    }
+
+    private async Task CancelReservation(BookReservation reservation)
+    {
+        try
+        {
+            await ReservationService.CancelReservationAsync(reservation.Id);
+            await ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ошибка при отмене брони: {ex.Message}";
+        }
     }
 }

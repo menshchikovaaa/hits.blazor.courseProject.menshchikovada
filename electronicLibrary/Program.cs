@@ -62,6 +62,7 @@ namespace electronicLibrary
             builder.Services.AddScoped<IGenreService, GenreService>();
             builder.Services.AddScoped<IUserService, UserService>();
             builder.Services.AddScoped<IBookLoanService, BookLoanService>();
+            builder.Services.AddScoped<IBookReservationService, BookReservationService>();
 
 
 

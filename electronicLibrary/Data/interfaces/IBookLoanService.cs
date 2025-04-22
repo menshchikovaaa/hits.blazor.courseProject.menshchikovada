@@ -4,7 +4,7 @@ namespace electronicLibrary.Data.interfaces
 {
     public interface IBookLoanService
     {
-        Task<BookLoan> LoanBookAsync(int bookId, string userId, int loanDays);
+        Task<BookLoan> LoanBookAsync(int bookId, string userId, int loanDays, bool skipReservationCheck = false);
         Task<List<BookLoan>> GetUserCurrentLoansAsync(string userId);
         Task<BookLoan> ReturnBookAsync(int loanId, string? userId = null);
         Task<BookLoan> RenewLoanAsync(int loanId, int additionalDays);

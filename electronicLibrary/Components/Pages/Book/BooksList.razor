@@ -1,6 +1,7 @@
 ﻿@page "/books"
 @rendermode InteractiveServer
 @inject IBookService BookService
+@inject IBookReservationService ReservationService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthProvider
 
@@ -61,10 +62,22 @@ else
                         {
                             <button @onclick="() => EditBook(book.Id)" class="btn btn-sm btn-warning ms-1">Редактировать</button>
                             <button @onclick="() => DeleteBook(book.Id)" class="btn btn-sm btn-danger ms-1">Удалить </button>
+                            <button @onclick="() => LoanBook(book.Id)" class="btn btn-sm btn-success ms-1">Выдать</button>
                         }
-                        @if (isUser && book.AvailableCopies > 0)
+                        @if (isUser)
                         {
-                            <button @onclick="() => LoanBook(book.Id)" class="btn btn-sm btn-success ms-1">Взять книгу</button>
+                            @if (book.AvailableCopies > 0)
+                            {
+                                <button @onclick="() => ReserveBook(book.Id)" class="btn btn-sm btn-primary ms-1">Забронировать</button>
+                            }
+                            else if (userReservations.Any(r => r.BookId == book.Id && r.IsActive))
+                            {
+                                <button @onclick="() => CancelReservation(book.Id)" class="btn btn-sm btn-warning ms-1">Отменить бронь</button>
+                            }
+                            else
+                            {
+                                <button disabled class="btn btn-sm btn-secondary ms-1">Нет в наличии</button>
+                            }
                         }
                     </td>
                 </tr>
@@ -76,15 +89,26 @@ else
 
 @code {
     private List<Book> books = new();
+    private List<BookReservation> userReservations = new();
     private string searchTerm = string.Empty;
     private bool isLibrarian;
     private bool isUser;
     private bool isAuthenticated;
+    private string? userId;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadBooks();
         await CheckUserRole();
+        if (isUser)
+        {
+            var authState = await AuthProvider.GetAuthenticationStateAsync();
+            userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!string.IsNullOrEmpty(userId))
+            {
+                userReservations = await ReservationService.GetUserReservationsAsync(userId);
+            }
+        }
     }
 
     private async Task LoadBooks()
@@ -130,7 +154,7 @@ else
         Navigation.NavigateTo("/books/add");
     }
 
-    private async Task LoanBook(int bookId)
+    private void LoanBook(int bookId)
     {
         Navigation.NavigateTo($"/books/loan/{bookId}");
     }
@@ -141,5 +165,21 @@ else
         isAuthenticated = authState.User.Identity?.IsAuthenticated ?? false;
         isLibrarian = authState.User.IsInRole("Librarian");
         isUser = authState.User.IsInRole("User");
+    }
+
+    private void ReserveBook(int bookId)
+    {
+        Navigation.NavigateTo($"/books/reserve/{bookId}");
+    }
+
+    private async Task CancelReservation(int bookId)
+    {
+        var reservation = userReservations.FirstOrDefault(r => r.BookId == bookId && r.IsActive);
+        if (reservation != null)
+        {
+            await ReservationService.CancelReservationAsync(reservation.Id);
+            userReservations = await ReservationService.GetUserReservationsAsync(userId);
+            StateHasChanged();
+        }
     }
 }
